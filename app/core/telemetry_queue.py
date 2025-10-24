@@ -20,3 +20,8 @@ class TelemetryQueue:
 
     def isEmpty(self) -> bool:
         return len(self.queue) == 0
+    
+    def clear(self):
+        
+        while not self.queue:
+            self.queue.popleft()

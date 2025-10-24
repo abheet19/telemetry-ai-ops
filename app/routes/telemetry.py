@@ -38,3 +38,8 @@ async def ingest_telemetry(record: TelemetryRecord):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@router.delete("/queue/clear", tags=["telemetry"])
+def clear_queue():
+    queue.clear()
+    return {"status": "success", "message": "Telemetry queue cleared."}
