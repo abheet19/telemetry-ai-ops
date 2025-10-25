@@ -23,5 +23,4 @@ class TelemetryQueue:
     
     def clear(self):
         
-        while not self.queue:
-            self.queue.popleft()
+        self.queue.clear()

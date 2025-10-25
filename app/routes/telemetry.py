@@ -2,6 +2,8 @@ from fastapi import APIRouter,HTTPException
 from app.models import TelemetryRecord
 from app.core.telemetry_queue import TelemetryQueue
 from app.ai.ai_analyzer import AIAnalyzer
+from app.utils.async_fetcher import collect_all_devices
+from fastapi import BackgroundTasks
 
 router =APIRouter()
 queue = TelemetryQueue()
@@ -19,7 +21,16 @@ def get_sample_telemetry():
         "osnr":35.8,
         "temperature":72.1
     }
-@router.post("/ingest")
+@router.get("/telemetry/fetch",tags=["telemetry"])
+async def fetch_all_telemetry():
+    devices=["switch_1","switch_2","amplifier_1","transponder_1"]
+    results= await collect_all_devices(devices)
+    return {
+        "device_count":len(results),
+        "data":[r.model_dump() for r in results]
+    }
+
+@router.post("/ingest",tags=["telemetry"])
 async def ingest_telemetry(record: TelemetryRecord):
     """
     Ingest telemetry data:
@@ -43,3 +54,17 @@ async def ingest_telemetry(record: TelemetryRecord):
 def clear_queue():
     queue.clear()
     return {"status": "success", "message": "Telemetry queue cleared."}
+
+@router.post("/ingest/batch",tags=["telemetry"])
+async def ingest_batch(records:list[TelemetryRecord],background_tasks:BackgroundTasks):
+    try:
+        for record in records:
+            queue.enqueue(record.model_dump())
+            background_tasks.add_task(analyzer.analyze_telemetry,record.model_dump())
+        return {
+            "status":"queued",
+            "count":len(records)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500,detail=str(e))
+    
