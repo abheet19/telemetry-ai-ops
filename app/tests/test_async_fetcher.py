@@ -25,9 +25,7 @@ def test_main_block(monkeypatch):
     # Mock TelemetryRecord-like objects
     mock_results = [AsyncMock(model_dump=lambda: {"device_id": "mock"}) for _ in range(5)]
 
-    # Define a **normal** function (not async) that returns our mock results
     def mock_run(coro):
-        # We can optionally run the coroutine to avoid warnings
         try:
             import asyncio
             loop = asyncio.new_event_loop()
@@ -37,8 +35,6 @@ def test_main_block(monkeypatch):
             pass
         return mock_results
 
-    # Patch asyncio.run with our synchronous mock
     monkeypatch.setattr(async_fetcher.asyncio, "run", mock_run)
 
-    # Run main() and ensure it executes the print loop without errors
     async_fetcher.main()
