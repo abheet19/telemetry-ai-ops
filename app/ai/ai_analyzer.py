@@ -41,4 +41,16 @@ class AIAnalyzer:
             )
             return response.choices[0].message.content
         except Exception as e:
-            return f"[Mock Analysis] OSNR={osnr}, BER={ber}, device={device_id}"
+            # return f"[Mock Analysis] OSNR={osnr}, BER={ber}, device={device_id}"
+            return f"error: {e}"
+        
+    def run_ai_analysis(self,data:dict):
+        """
+        Background Task for AI Analysis
+        """
+        device_id=data.get("device_id","unknown")
+        try:
+            insights=self.analyze_telemetry(data)
+            print(f"[AI Insights] {device_id} -> {insights}")
+        except Exception as e:
+            print(f"[AI Error] {device_id}: {e}")

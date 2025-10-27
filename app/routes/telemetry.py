@@ -50,6 +50,10 @@ async def ingest_telemetry(record: TelemetryRecord):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
+@router.get("/queue/status", tags=["telemetry"])
+def queue_status():
+    return {"queued_packets": queue.size()}
+    
 @router.delete("/queue/clear", tags=["telemetry"])
 def clear_queue():
     queue.clear()
@@ -60,7 +64,7 @@ async def ingest_batch(records:list[TelemetryRecord],background_tasks:Background
     try:
         for record in records:
             queue.enqueue(record.model_dump())
-            background_tasks.add_task(analyzer.analyze_telemetry,record.model_dump())
+            background_tasks.add_task(analyzer.run_ai_analysis,record.model_dump())
         return {
             "status":"queued",
             "count":len(records)
@@ -68,3 +72,15 @@ async def ingest_batch(records:list[TelemetryRecord],background_tasks:Background
     except Exception as e:
         raise HTTPException(status_code=500,detail=str(e))
     
+@router.post("/pipeline/toggle", tags=["pipeline"])
+async def toggle_pipeline(state: bool):
+    """Enable or disable background pipeline."""
+    global PIPELINE_RUNNING
+    PIPELINE_RUNNING = state
+    return {"status": "ok", "pipeline_running": state}
+
+@router.get("/pipeline/status", tags=["pipeline"])
+def pipeline_status():
+    return {"running": True, "message": "Pipeline active and fetching telemetry"}
+
+
