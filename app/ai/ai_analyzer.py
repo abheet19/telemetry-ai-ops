@@ -1,6 +1,7 @@
 from openai import OpenAI
 from app.core.config import settings
 import os
+from app.services.pipeline import is_pipeline_running
 
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
@@ -48,6 +49,9 @@ class AIAnalyzer:
         """
         Background Task for AI Analysis
         """
+        if not is_pipeline_running():
+            print(f"[AI Analyzer] Skipped analysis — pipeline paused for device {data.get('device_id', 'unknown')}.")
+            return
         device_id=data.get("device_id","unknown")
         try:
             insights=self.analyze_telemetry(data)

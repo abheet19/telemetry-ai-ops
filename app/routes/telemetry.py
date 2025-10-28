@@ -4,6 +4,8 @@ from app.core.telemetry_queue import TelemetryQueue
 from app.ai.ai_analyzer import AIAnalyzer
 from app.utils.async_fetcher import collect_all_devices
 from fastapi import BackgroundTasks
+from app.services.pipeline import telemetry_pipeline,is_pipeline_running, set_pipeline_state
+import asyncio
 
 router =APIRouter()
 queue = TelemetryQueue()
@@ -75,12 +77,14 @@ async def ingest_batch(records:list[TelemetryRecord],background_tasks:Background
 @router.post("/pipeline/toggle", tags=["pipeline"])
 async def toggle_pipeline(state: bool):
     """Enable or disable background pipeline."""
-    global PIPELINE_RUNNING
-    PIPELINE_RUNNING = state
-    return {"status": "ok", "pipeline_running": state}
+    set_pipeline_state(state)
+    if state:
+        asyncio.create_task(telemetry_pipeline())
+        return {"status": "ok", "pipeline_running": True,"message":"Pipeline Restarted"}
+    else:
+        return {"status": "ok", "pipeline_running": False,"message":"Pipeline Stopped"}
 
 @router.get("/pipeline/status", tags=["pipeline"])
 def pipeline_status():
-    return {"running": True, "message": "Pipeline active and fetching telemetry"}
-
+    return {"running": is_pipeline_running(), "message": "Pipeline active and fetching telemetry" if is_pipeline_running() else "Pipeline stopped"}
 

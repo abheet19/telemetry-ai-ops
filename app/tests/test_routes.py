@@ -99,7 +99,6 @@ async def test_fetch_all_telemetry(monkeypatch):
 
 
 def test_clear_queue():
-    #Ensure a clean queue before testing
     queue.clear()
     assert queue.size() == 0  # sanity check before starting
 
@@ -115,3 +114,28 @@ def test_clear_queue():
     assert body["message"] == "Telemetry queue cleared."
 
     assert queue.size() == 0
+
+def test_queue_status():
+    queue.clear()
+    assert queue.size() == 0
+
+    queue.enqueue({"device_id": "switch1", "osnr": 30.1})
+    response= client.get("/queue/status")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["queued_packets"] == 1
+
+def test_pipeline_toggle():
+    response = client.post("/pipeline/toggle?state=false")
+    assert response.status_code == 200
+    assert response.json()["pipeline_running"] is False
+
+    response2 = client.post("/pipeline/toggle?state=true")
+    assert response2.status_code == 200
+    assert response2.json()["pipeline_running"] is True
+
+def test_pipeline_status():
+    res = client.get("/pipeline/status")
+    assert res.status_code == 200
+    assert "running" in res.json()

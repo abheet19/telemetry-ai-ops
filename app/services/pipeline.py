@@ -5,6 +5,13 @@ from app.core.telemetry_queue import TelemetryQueue
 queue= TelemetryQueue()
 PIPELINE_RUNNING = True
 
+def set_pipeline_state(state: bool):
+    global PIPELINE_RUNNING
+    PIPELINE_RUNNING = state
+
+def is_pipeline_running():
+    return PIPELINE_RUNNING
+
 async def telemetry_pipeline():
     """
     Simulates real ingestion:
@@ -12,10 +19,9 @@ async def telemetry_pipeline():
     - Sends all telemetry as one batch to /ingest/batch
     - Waits and repeats in a loop
     """
-    global PIPELINE_RUNNING
     print("[Pipeline] Starting telemetry ingestion loop...")
 
-    while PIPELINE_RUNNING:
+    while is_pipeline_running():
             #Step 1 -fetch telemetry from local API
         try:
             async with httpx.AsyncClient() as client:
