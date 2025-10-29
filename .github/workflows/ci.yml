@@ -8,7 +8,7 @@ on:
 
 jobs:
   lint:
-    name: Lint & Format
+    name: Lint & Format Check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -22,19 +22,10 @@ jobs:
       - name: Install linters and formatters
         run: pip install ruff black
 
-      - name: Run Black formatter (auto-fix)
-        run: black .
-
-      - name: Run Ruff linter (auto-fix)
-        run: ruff check . --fix
-
-      - name: Auto-commit lint and format fixes
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "ci: auto-format and lint fixes via GitHub Actions"
-          commit_user_name: GitHub Actions
-          commit_user_email: actions@github.com
-          branch: ${{ github.ref_name }}
+      - name: Verify code formatting and linting
+        run: |
+          black --check .
+          ruff check .
 
   test:
     name: Run Tests
