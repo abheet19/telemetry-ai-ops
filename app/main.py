@@ -37,11 +37,7 @@ def create_app() -> FastAPI:
     """
     Factory function to create and configure the FastAPI app.
     """
-    app = FastAPI(
-        title="Telemetry AI OPS",
-        version="1.0.0",
-        lifespan=lifespan
-    )
+    app = FastAPI(title="Telemetry AI OPS", version="1.0.0", lifespan=lifespan)
 
     # Register routes
     app.include_router(telemetry.router)

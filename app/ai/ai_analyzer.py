@@ -1,6 +1,5 @@
 from openai import OpenAI
 from app.core.config import settings
-import os
 from app.services.pipeline import is_pipeline_running
 
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
@@ -44,17 +43,19 @@ class AIAnalyzer:
         except Exception as e:
             # return f"[Mock Analysis] OSNR={osnr}, BER={ber}, device={device_id}"
             return f"error: {e}"
-        
-    def run_ai_analysis(self,data:dict):
+
+    def run_ai_analysis(self, data: dict):
         """
         Background Task for AI Analysis
         """
         if not is_pipeline_running():
-            print(f"[AI Analyzer] Skipped analysis — pipeline paused for device {data.get('device_id', 'unknown')}.")
+            print(
+                f"[AI Analyzer] Skipped analysis — pipeline paused for device {data.get('device_id', 'unknown')}."
+            )
             return
-        device_id=data.get("device_id","unknown")
+        device_id = data.get("device_id", "unknown")
         try:
-            insights=self.analyze_telemetry(data)
+            insights = self.analyze_telemetry(data)
             print(f"[AI Insights] {device_id} -> {insights}")
         except Exception as e:
             print(f"[AI Error] {device_id}: {e}")

@@ -1,5 +1,6 @@
 from app.core.telemetry_queue import TelemetryQueue
 
+
 def test_queue_enqueue_dequeue():
     q = TelemetryQueue()
     sample_data = {"device_id": "switch1", "osnr": 30.1}
@@ -11,6 +12,7 @@ def test_queue_enqueue_dequeue():
     dequeued = q.dequeue()
     assert dequeued == sample_data
     assert q.size() == 0
+
 
 def test_queue_empty_behavior():
     q = TelemetryQueue()

@@ -5,11 +5,13 @@ from app.routes.telemetry import queue
 
 client = TestClient(app)
 
+
 def test_health():
-    response=client.get("/health")
+    response = client.get("/health")
     body = response.json()
     assert body["status"] == "ok"
-    assert body["service"] == "telemetry_ai_ops" 
+    assert body["service"] == "telemetry_ai_ops"
+
 
 def test_telemetry():
     response = client.get("/telemetry")
@@ -20,12 +22,16 @@ def test_telemetry():
     assert isinstance(data["osnr"], float)
     assert isinstance(data["temperature"], float)
 
+
 def test_ingest_valid_payload(monkeypatch):
-   
+
     # Mock AIAnalyzer response to isolate FastAPI logic
     from app.ai import ai_analyzer
+
     monkeypatch.setattr(
-        ai_analyzer.AIAnalyzer, "analyze_telemetry", lambda self, data: {"status": "mocked", "issues": []}
+        ai_analyzer.AIAnalyzer,
+        "analyze_telemetry",
+        lambda self, data: {"status": "mocked", "issues": []},
     )
 
     payload = {
@@ -33,7 +39,7 @@ def test_ingest_valid_payload(monkeypatch):
         "wavelength": 1550.1,
         "osnr": 25.0,
         "ber": 1e-8,
-        "power_dbm": -2.5
+        "power_dbm": -2.5,
     }
 
     response = client.post("/ingest", json=payload)
@@ -42,6 +48,7 @@ def test_ingest_valid_payload(monkeypatch):
     assert "queued_packets" in data
     assert data["status"] == "success"
     assert "ai_insights" in data
+
 
 def test_ingest_invalid_payload():
     bad_payload = {
@@ -55,8 +62,20 @@ def test_ingest_invalid_payload():
 
 def test_batch_ingest():
     payload = [
-        {"device_id": "switch_1", "wavelength": 1550.3, "osnr": 30.0, "ber": 1e-9, "power_dbm": -20.5},
-        {"device_id": "amp_2", "wavelength": 1550.5, "osnr": 18.5, "ber": 1e-3, "power_dbm": -23.1}
+        {
+            "device_id": "switch_1",
+            "wavelength": 1550.3,
+            "osnr": 30.0,
+            "ber": 1e-9,
+            "power_dbm": -20.5,
+        },
+        {
+            "device_id": "amp_2",
+            "wavelength": 1550.5,
+            "osnr": 18.5,
+            "ber": 1e-3,
+            "power_dbm": -23.1,
+        },
     ]
     response = client.post("/ingest/batch", json=payload)
     assert response.status_code == 200
@@ -64,9 +83,10 @@ def test_batch_ingest():
     assert data["status"] == "queued"
     assert data["count"] == 2
 
+
 @pytest.mark.asyncio
 async def test_fetch_all_telemetry(monkeypatch):
-   
+
     response = client.get("/telemetry/fetch")
 
     assert response.status_code == 200, "Expected 200 OK response"
@@ -115,16 +135,18 @@ def test_clear_queue():
 
     assert queue.size() == 0
 
+
 def test_queue_status():
     queue.clear()
     assert queue.size() == 0
 
     queue.enqueue({"device_id": "switch1", "osnr": 30.1})
-    response= client.get("/queue/status")
+    response = client.get("/queue/status")
 
     assert response.status_code == 200
     body = response.json()
     assert body["queued_packets"] == 1
+
 
 def test_pipeline_toggle():
     response = client.post("/pipeline/toggle?state=false")
@@ -134,6 +156,7 @@ def test_pipeline_toggle():
     response2 = client.post("/pipeline/toggle?state=true")
     assert response2.status_code == 200
     assert response2.json()["pipeline_running"] is True
+
 
 def test_pipeline_status():
     res = client.get("/pipeline/status")

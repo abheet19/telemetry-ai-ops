@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock
 import app.utils.async_fetcher as async_fetcher
 import pytest
 
+
 @pytest.mark.asyncio
 async def test_fetch_telemetry():
     device_id = "switch_test"
@@ -10,6 +11,7 @@ async def test_fetch_telemetry():
     assert 18.0 <= record.osnr <= 36.0
     assert record.ber in [1e-9, 1e-6, 1e-3]
     assert -22.0 <= record.power_dbm <= 18.0
+
 
 @pytest.mark.asyncio
 async def test_collect_all_devices():
@@ -20,13 +22,17 @@ async def test_collect_all_devices():
         assert record.osnr >= 18.0
         assert record.ber in [1e-9, 1e-6, 1e-3]
 
+
 def test_main_block(monkeypatch):
     # Mock TelemetryRecord-like objects
-    mock_results = [AsyncMock(model_dump=lambda: {"device_id": "mock"}) for _ in range(5)]
+    mock_results = [
+        AsyncMock(model_dump=lambda: {"device_id": "mock"}) for _ in range(5)
+    ]
 
     def mock_run(coro):
         try:
             import asyncio
+
             loop = asyncio.new_event_loop()
             loop.run_until_complete(coro)
             loop.close()

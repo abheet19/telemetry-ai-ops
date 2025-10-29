@@ -3,6 +3,7 @@ import pytest
 
 from app.services import pipeline as pipeline_mod
 
+
 # ---- Helper mocks ----
 class MockResponse:
     def __init__(self, json_data=None, status=200):
@@ -16,12 +17,14 @@ class MockResponse:
     def json(self):
         return self._json
 
+
 class MockAsyncClient:
     """
     Minimal async context-manager that mimics httpx.AsyncClient used in pipeline.
     Behavior is controlled by passing get_resp and post_resp to the constructor.
     The post() method will set pipeline state to False so the loop stops after one run.
     """
+
     def __init__(self, get_resp=None, post_resp=None, raise_on_get=False):
         self._get_resp = get_resp
         self._post_resp = post_resp or {"ok": True}
@@ -44,12 +47,15 @@ class MockAsyncClient:
         pipeline_mod.set_pipeline_state(False)
         return MockResponse(self._post_resp, status=200)
 
+
 # ---- Test fixtures ----
 @pytest.fixture(autouse=True)
 def noop_sleep(monkeypatch):
     """Replace asyncio.sleep with a fast no-op to speed tests."""
+
     async def _nop(_):
         return None
+
     monkeypatch.setattr(asyncio, "sleep", _nop)
     yield
 
@@ -73,6 +79,7 @@ async def test_telemetry_pipeline_no_data(monkeypatch, capsys):
       - pipeline stops after first loop (MockAsyncClient will call set_pipeline_state(False) only on post,
         so we make get set pipeline state False explicitly inside the mock by using a small wrapper).
     """
+
     # Prepare a MockAsyncClient that returns empty data and will set pipeline False inside get
     class NoDataClient(MockAsyncClient):
         async def get(self, url):
@@ -81,7 +88,9 @@ async def test_telemetry_pipeline_no_data(monkeypatch, capsys):
             return MockResponse({"data": []}, status=200)
 
     # Replace httpx.AsyncClient with our mock
-    monkeypatch.setattr("httpx.AsyncClient", lambda: NoDataClient(get_resp={"data": []}))
+    monkeypatch.setattr(
+        "httpx.AsyncClient", lambda: NoDataClient(get_resp={"data": []})
+    )
 
     # Ensure pipeline runs
     pipeline_mod.set_pipeline_state(True)
@@ -105,14 +114,43 @@ async def test_telemetry_pipeline_success_batch(monkeypatch, capsys):
       - pipeline stops (MockAsyncClient.post sets pipeline state False)
     """
     sample_data = [
-        {"device_id": "switch_1", "osnr": 30.1, "ber": 1e-9, "wavelength": 1550.1, "power_dbm": -20.0},
-        {"device_id": "switch_2", "osnr": 25.4, "ber": 1e-6, "wavelength": 1550.3, "power_dbm": -22.0},
-        {"device_id": "amp_1", "osnr": 28.0, "ber": 1e-9, "wavelength": 1550.5, "power_dbm": -18.0},
-        {"device_id": "transp_1", "osnr": 21.0, "ber": 1e-3, "wavelength": 1550.7, "power_dbm": -25.0},
+        {
+            "device_id": "switch_1",
+            "osnr": 30.1,
+            "ber": 1e-9,
+            "wavelength": 1550.1,
+            "power_dbm": -20.0,
+        },
+        {
+            "device_id": "switch_2",
+            "osnr": 25.4,
+            "ber": 1e-6,
+            "wavelength": 1550.3,
+            "power_dbm": -22.0,
+        },
+        {
+            "device_id": "amp_1",
+            "osnr": 28.0,
+            "ber": 1e-9,
+            "wavelength": 1550.5,
+            "power_dbm": -18.0,
+        },
+        {
+            "device_id": "transp_1",
+            "osnr": 21.0,
+            "ber": 1e-3,
+            "wavelength": 1550.7,
+            "power_dbm": -25.0,
+        },
     ]
 
     # Monkeypatch AsyncClient to our Mock that returns sample_data on get and stops pipeline on post
-    monkeypatch.setattr("httpx.AsyncClient", lambda: MockAsyncClient(get_resp={"data": sample_data}, post_resp={"status": "ok"}))
+    monkeypatch.setattr(
+        "httpx.AsyncClient",
+        lambda: MockAsyncClient(
+            get_resp={"data": sample_data}, post_resp={"status": "ok"}
+        ),
+    )
 
     pipeline_mod.set_pipeline_state(True)
     await pipeline_mod.telemetry_pipeline()
@@ -131,6 +169,7 @@ async def test_telemetry_pipeline_fetch_error(monkeypatch, capsys):
         then raise an exception to simulate a fetch error.
       - The pipeline should catch the exception and print a '[Pipeline Error]' message.
     """
+
     # Create a mock client where get() sets pipeline state False and then raises
     class RaisingClient(MockAsyncClient):
         async def get(self, url):
@@ -151,4 +190,7 @@ async def test_telemetry_pipeline_fetch_error(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert "[Pipeline] Starting telemetry ingestion loop..." in captured.out
     # Ensure pipeline printed an error message
-    assert "[Pipeline Error]" in captured.out or "simulated fetch error" in captured.out.lower()
+    assert (
+        "[Pipeline Error]" in captured.out
+        or "simulated fetch error" in captured.out.lower()
+    )

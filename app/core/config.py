@@ -10,15 +10,15 @@ DOTENV_PATH = os.path.join(BASE_DIR, ".env")
 load_dotenv(DOTENV_PATH)
 print(f"Loading .env from: {DOTENV_PATH}")
 
+
 class Settings(BaseSettings):
     """
     Application settings loaded from environment variables or .env file.
     Provides a fallback default for test/Docker environments.
     """
+
     model_config = SettingsConfigDict(
-        env_file=DOTENV_PATH,
-        env_file_encoding="utf-8",
-        extra="ignore"
+        env_file=DOTENV_PATH, env_file_encoding="utf-8", extra="ignore"
     )
 
     # ✅ Provide a fallback so tests/Docker won't fail if .env isn't loaded
