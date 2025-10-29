@@ -1,10 +1,7 @@
 import asyncio
-import types
 import pytest
 
-# Import the module under test
 from app.services import pipeline as pipeline_mod
-
 
 # ---- Helper mocks ----
 class MockResponse:

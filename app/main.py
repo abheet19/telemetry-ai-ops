@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from app.routes import telemetry
-from app.services.pipeline import telemetry_pipeline, set_pipeline_state, is_pipeline_running
+from app.services.pipeline import telemetry_pipeline, set_pipeline_state
 from contextlib import asynccontextmanager
 import asyncio
 

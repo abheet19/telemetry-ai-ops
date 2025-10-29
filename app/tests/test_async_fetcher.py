@@ -1,5 +1,4 @@
-import importlib
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock
 import app.utils.async_fetcher as async_fetcher
 import pytest
 

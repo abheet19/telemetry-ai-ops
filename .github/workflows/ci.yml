@@ -15,7 +15,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install ruff
-      - run: ruff check .
+      - name: Run Ruff with auto-fix
+      - run: ruff check . --fix
 
   test:
     runs-on: ubuntu-latest
