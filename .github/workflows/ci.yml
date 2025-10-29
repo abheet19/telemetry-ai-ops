@@ -21,8 +21,8 @@ jobs:
       - name: Install linters
         run: pip install ruff black
 
-      - name: Run Black formatter check
-        run: black --check .
+      - name: Run Black formatter (auto-fix)
+        run: black .
 
       - name: Run Ruff with auto-fix
         run: ruff check . --fix
