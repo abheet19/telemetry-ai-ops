@@ -12,12 +12,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# # Copy .env file
-# COPY .env /app/.env
-
-# # Ensure .env is readable
-# RUN chmod 644 /app/.env
-
 # ---------- Test Stage ----------
 FROM base AS test
 

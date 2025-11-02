@@ -48,7 +48,7 @@ async def telemetry_pipeline():
                 f"[Pipeline] Batch of {len(telemetry_data)} telemetry records ingested successfully."
             )
 
-            await asyncio.sleep(10)
+            await asyncio.sleep(2)
 
         except Exception as e:
             print(f"[Pipeline Error] {e}")

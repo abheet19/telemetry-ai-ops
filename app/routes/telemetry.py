@@ -1,9 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request, Body
 from app.models import TelemetryRecord
 from app.core.telemetry_queue import TelemetryQueue
-from app.ai.ai_analyzer import AIAnalyzer
+from app.services.ai_analyzer import AIAnalyzer
 from app.utils.async_fetcher import collect_all_devices
-from fastapi import BackgroundTasks
 from app.services.pipeline import (
     telemetry_pipeline,
     is_pipeline_running,
@@ -38,27 +37,6 @@ async def fetch_all_telemetry():
     return {"device_count": len(results), "data": [r.model_dump() for r in results]}
 
 
-@router.post("/ingest", tags=["telemetry"])
-async def ingest_telemetry(record: TelemetryRecord):
-    """
-    Ingest telemetry data:
-    - Validates input
-    - Queues it
-    - Runs AI health analysis
-    """
-    try:
-        record_dict = record.model_dump()
-        queue.enqueue(record_dict)
-        insights = analyzer.analyze_telemetry(record_dict)
-        return {
-            "status": "success",
-            "queued_packets": queue.size(),
-            "ai_insights": insights,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.get("/queue/status", tags=["telemetry"])
 def queue_status():
     return {"queued_packets": queue.size()}
@@ -71,13 +49,13 @@ def clear_queue():
 
 
 @router.post("/ingest/batch", tags=["telemetry"])
-async def ingest_batch(
-    records: list[TelemetryRecord], background_tasks: BackgroundTasks
-):
+async def ingest_batch(request: Request, records: list[TelemetryRecord] = Body(...)):
     try:
+        ai_batcher = request.app.state.ai_batcher  # grab shared batcher
         for record in records:
-            queue.enqueue(record.model_dump())
-            background_tasks.add_task(analyzer.run_ai_analysis, record.model_dump())
+            rec_dict = record.model_dump()
+            queue.enqueue(rec_dict)
+            await ai_batcher.enqueue(rec_dict)  # push into batcher
         return {"status": "queued", "count": len(records)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

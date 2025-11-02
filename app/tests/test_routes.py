@@ -2,6 +2,8 @@ from fastapi.testclient import TestClient
 from app.main import app
 import pytest
 from app.routes.telemetry import queue
+from unittest.mock import AsyncMock
+import httpx
 
 client = TestClient(app)
 
@@ -21,67 +23,6 @@ def test_telemetry():
     assert isinstance(data["signal_strength"], float)
     assert isinstance(data["osnr"], float)
     assert isinstance(data["temperature"], float)
-
-
-def test_ingest_valid_payload(monkeypatch):
-
-    # Mock AIAnalyzer response to isolate FastAPI logic
-    from app.ai import ai_analyzer
-
-    monkeypatch.setattr(
-        ai_analyzer.AIAnalyzer,
-        "analyze_telemetry",
-        lambda self, data: {"status": "mocked", "issues": []},
-    )
-
-    payload = {
-        "device_id": "switch_1",
-        "wavelength": 1550.1,
-        "osnr": 25.0,
-        "ber": 1e-8,
-        "power_dbm": -2.5,
-    }
-
-    response = client.post("/ingest", json=payload)
-    assert response.status_code == 200
-    data = response.json()
-    assert "queued_packets" in data
-    assert data["status"] == "success"
-    assert "ai_insights" in data
-
-
-def test_ingest_invalid_payload():
-    bad_payload = {
-        "device_id": "switch_1",
-        # Missing wavelength, osnr, etc.
-    }
-
-    response = client.post("/ingest", json=bad_payload)
-    assert response.status_code == 422  # Unprocessable Entity (validation error)
-
-
-def test_batch_ingest():
-    payload = [
-        {
-            "device_id": "switch_1",
-            "wavelength": 1550.3,
-            "osnr": 30.0,
-            "ber": 1e-9,
-            "power_dbm": -20.5,
-        },
-        {
-            "device_id": "amp_2",
-            "wavelength": 1550.5,
-            "osnr": 18.5,
-            "ber": 1e-3,
-            "power_dbm": -23.1,
-        },
-    ]
-    response = client.post("/ingest/batch", json=payload)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "queued"
-    assert data["count"] == 2
 
 
 @pytest.mark.asyncio
@@ -162,3 +103,77 @@ def test_pipeline_status():
     res = client.get("/pipeline/status")
     assert res.status_code == 200
     assert "running" in res.json()
+
+
+@pytest.mark.asyncio
+async def test_ingest_batch_success(monkeypatch):
+    # Create fake AIBatcher with mock enqueue
+    fake_batcher = AsyncMock()
+    fake_batcher.enqueue = AsyncMock()
+
+    # Import the running FastAPI app from main
+    from app.main import app
+
+    # Inject fake batcher into app state so route finds it
+    app.state.ai_batcher = fake_batcher
+
+    # Prevent queue real behavior (just no-op)
+    monkeypatch.setattr("app.routes.telemetry.queue.enqueue", lambda x: None)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        # Make sure this matches TelemetryRecord required fields exactly.
+        sample_records = [
+            {
+                "device_id": "switch_1",
+                "wavelength": 1550.3,
+                "osnr": 34.8,
+                "ber": 1e-9,
+                "power_dbm": -21.5,
+            },
+            {
+                "device_id": "amp_1",
+                "wavelength": 1550.5,
+                "osnr": 28.2,
+                "ber": 2e-8,
+                "power_dbm": -19.7,
+            },
+        ]
+        resp = await ac.post("/ingest/batch", json=sample_records)
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "queued"
+    assert data["count"] == 2
+    assert fake_batcher.enqueue.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_ingest_batch_failure(monkeypatch):
+    """Test batch ingestion when AI batcher throws exception."""
+    fake_batcher = AsyncMock()
+    fake_batcher.enqueue = AsyncMock(side_effect=RuntimeError("AI batcher failed"))
+
+    from app.main import app
+
+    app.state.ai_batcher = fake_batcher
+
+    monkeypatch.setattr("app.routes.telemetry.queue.enqueue", lambda x: None)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        sample_records = [
+            {
+                "device_id": "switch_1",
+                "wavelength": 1550.3,
+                "osnr": 34.8,
+                "ber": 1e-9,
+                "power_dbm": -21.5,
+            }
+        ]
+        resp = await ac.post("/ingest/batch", json=sample_records)
+
+    assert resp.status_code == 500
+    data = resp.json()
+    assert "detail" in data
+    assert "AI batcher failed" in data["detail"]

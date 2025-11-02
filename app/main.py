@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from app.routes import telemetry
 from app.services.pipeline import telemetry_pipeline, set_pipeline_state
+from app.services.ai_analyzer import AIAnalyzer
+from app.services.ai_batcher import AIBatcher
 from contextlib import asynccontextmanager
 import asyncio
 
@@ -13,8 +15,14 @@ async def lifespan(app: FastAPI):
     - Cancels it safely on shutdown.
     """
     # Start background task at startup
-    print("[System] Starting telemetry pipeline task...")
+    print("[System] Starting telemetry pipeline and AI batcher...")
     set_pipeline_state(True)
+
+    analyzer = AIAnalyzer()
+    ai_batcher = AIBatcher(analyzer)
+    await ai_batcher.start()
+    app.state.ai_batcher = ai_batcher
+
     pipeline_task = asyncio.create_task(telemetry_pipeline())
     app.state.pipeline_task = pipeline_task
 
@@ -22,7 +30,7 @@ async def lifespan(app: FastAPI):
         yield  # Application runs while yielded
     finally:
         # Graceful shutdown: stop pipeline, cancel async task
-        print("[System] Shutting down telemetry pipeline...")
+        print("[System] Shutting down telemetry pipeline and AI batcher...")
         set_pipeline_state(False)
         pipeline_task.cancel()
         try:
@@ -32,18 +40,16 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             print(f"[System] Pipeline shutdown error: {exc}")
 
+        await ai_batcher.stop()
+
 
 def create_app() -> FastAPI:
     """
     Factory function to create and configure the FastAPI app.
     """
     app = FastAPI(title="Telemetry AI OPS", version="1.0.0", lifespan=lifespan)
-
-    # Register routes
     app.include_router(telemetry.router)
-
     return app
 
 
-# FastAPI app instance for Uvicorn
 app = create_app()
