@@ -3,6 +3,7 @@ from openai import AsyncOpenAI
 from app.core.config import settings
 import re
 import json
+import asyncio
 
 # This file implements a hybrid analyzer:
 #  - small fast heuristic rules handled locally (cheap)
@@ -39,31 +40,33 @@ class AIAnalyzer:
           - if ai_needed list is empty -> return heuristics results
           - otherwise call external AI (here simulated) for only those items
         """
+        try:
+            # first pass: heuristics
+            results: List[Dict[str, Any]] = []
+            ai_needed = []
+            ai_indices = []
+            for i, rec in enumerate(batch):
+                res = await self.run_ai_analysis(rec)
+                if res.get("status") == "needs_ai":
+                    ai_needed.append(rec)
+                    ai_indices.append(i)
+                    results.append(None)  # placeholder
+                else:
+                    results.append(res)
 
-        # first pass: heuristics
-        results: List[Dict[str, Any]] = []
-        ai_needed = []
-        ai_indices = []
-        for i, rec in enumerate(batch):
-            res = await self.run_ai_analysis(rec)
-            if res.get("status") == "needs_ai":
-                ai_needed.append(rec)
-                ai_indices.append(i)
-                results.append(None)  # placeholder
-            else:
-                results.append(res)
+            if not ai_needed:
+                return results
 
-        if not ai_needed:
+            # simulate async external AI call for ai_needed:
+            ai_out = await self._call_external_ai_for_batch(ai_needed)
+            print("AI Called")
+            # merge responses back into results
+            for idx, out in zip(ai_indices, ai_out):
+                results[idx] = out
             return results
-
-        # simulate async external AI call for ai_needed:
-        ai_out = await self._call_external_ai_for_batch(ai_needed)
-        print("AI Called")
-        # merge responses back into results
-        for idx, out in zip(ai_indices, ai_out):
-            results[idx] = out
-
-        return results
+        except asyncio.CancelledError:
+            print("[AIAnalyzer] Batch cancelled due to shutdown")
+            raise
 
     async def _call_external_ai_for_batch(
         self, records: List[Dict[str, Any]]

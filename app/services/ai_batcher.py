@@ -8,6 +8,8 @@ from tenacity import (
     retry_if_exception_type,
 )
 from prometheus_client import Summary, Counter, Gauge
+from app.core.database import SessionLocal
+from app.models import AIResult
 
 AI_LATENCY = Summary(
     "ai_inference_latency_seconds", "Latency for AI inference(seconds)"
@@ -117,7 +119,23 @@ class AIBatcher:
                 reraise=True,
             ):
                 with attempt:
-                    await self.analyzer.run_ai_analysis_batch(batch)
+                    results = await self.analyzer.run_ai_analysis_batch(batch)
+
+                    # Persist results to DB (only after successful analysis)
+                    with SessionLocal() as session:
+                        for rec, res in zip(batch, results):
+                            db_entry = AIResult(
+                                device_id=rec.get("device_id"),
+                                osnr=rec.get("osnr"),
+                                ber=rec.get("ber"),
+                                power_dbm=rec.get("power_dbm"),
+                                wavelength=rec.get("wavelength"),
+                                status=res.get("status") or "ok",
+                                message=res.get("message"),
+                                ai_output=res,
+                            )
+                            session.add(db_entry)
+                        session.commit()
 
             AI_LATENCY.observe(time.time() - start)
         except Exception as exc:

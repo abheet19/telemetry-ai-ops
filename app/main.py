@@ -1,5 +1,6 @@
 from fastapi import FastAPI
-from app.routes import telemetry
+from app.routes import telemetry, metrics
+from app.core.database import Base, engine
 from app.services.pipeline import telemetry_pipeline, set_pipeline_state
 from app.services.ai_analyzer import AIAnalyzer
 from app.services.ai_batcher import AIBatcher
@@ -22,6 +23,9 @@ async def lifespan(app: FastAPI):
     ai_batcher = AIBatcher(analyzer)
     await ai_batcher.start()
     app.state.ai_batcher = ai_batcher
+
+    # Create database tables at startup
+    Base.metadata.create_all(bind=engine)
 
     pipeline_task = asyncio.create_task(telemetry_pipeline())
     app.state.pipeline_task = pipeline_task
@@ -49,6 +53,7 @@ def create_app() -> FastAPI:
     """
     app = FastAPI(title="Telemetry AI OPS", version="1.0.0", lifespan=lifespan)
     app.include_router(telemetry.router)
+    app.include_router(metrics.router)
     return app
 
 
