@@ -177,3 +177,15 @@ async def test_ingest_batch_failure(monkeypatch):
     data = resp.json()
     assert "detail" in data
     assert "AI batcher failed" in data["detail"]
+
+
+def test_metrics_endpoint():
+    """Test Prometheus metrics endpoint."""
+    from prometheus_client import CONTENT_TYPE_LATEST
+
+    response = client.get("/metrics")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == CONTENT_TYPE_LATEST
+    # Metrics should be text/plain format
+    assert isinstance(response.content, bytes)
+    assert len(response.content) > 0

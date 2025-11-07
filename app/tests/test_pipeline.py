@@ -194,3 +194,94 @@ async def test_telemetry_pipeline_fetch_error(monkeypatch, capsys):
         "[Pipeline Error]" in captured.out
         or "simulated fetch error" in captured.out.lower()
     )
+
+
+@pytest.mark.asyncio
+async def test_telemetry_pipeline_fetch_raise_for_status_error(monkeypatch, capsys):
+    """Test pipeline handles HTTP error from fetch (raise_for_status)."""
+
+    class HTTPErrorClient(MockAsyncClient):
+        async def get(self, url):
+            pipeline_mod.set_pipeline_state(False)
+            return MockResponse({"data": []}, status=500)  # HTTP error
+
+    monkeypatch.setattr("httpx.AsyncClient", lambda: HTTPErrorClient())
+
+    pipeline_mod.set_pipeline_state(True)
+    await pipeline_mod.telemetry_pipeline()
+
+    captured = capsys.readouterr()
+    assert "[Pipeline] Starting telemetry ingestion loop..." in captured.out
+    assert "[Pipeline Error]" in captured.out or "500" in captured.out
+
+
+@pytest.mark.asyncio
+async def test_telemetry_pipeline_post_raise_for_status_error(monkeypatch, capsys):
+    """Test pipeline handles HTTP error from post (raise_for_status)."""
+
+    sample_data = [
+        {
+            "device_id": "switch_1",
+            "osnr": 30.1,
+            "ber": 1e-9,
+            "wavelength": 1550.1,
+            "power_dbm": -20.0,
+        }
+    ]
+
+    # Create a client that returns good data on get but error on post
+    class MixedClient(MockAsyncClient):
+        async def get(self, url):
+            return MockResponse({"data": sample_data}, status=200)
+
+        async def post(self, url, json):
+            pipeline_mod.set_pipeline_state(False)
+            return MockResponse({"error": "Server error"}, status=500)
+
+    monkeypatch.setattr("httpx.AsyncClient", lambda: MixedClient())
+
+    pipeline_mod.set_pipeline_state(True)
+    await pipeline_mod.telemetry_pipeline()
+
+    captured = capsys.readouterr()
+    assert "[Pipeline] Starting telemetry ingestion loop..." in captured.out
+    assert "[Pipeline Error]" in captured.out or "500" in captured.out
+
+
+@pytest.mark.asyncio
+async def test_telemetry_pipeline_json_error(monkeypatch, capsys):
+    """Test pipeline handles JSON parsing error."""
+
+    class JSONErrorClient(MockAsyncClient):
+        async def get(self, url):
+            pipeline_mod.set_pipeline_state(False)
+            # Return a response that will cause JSON parsing to fail
+            response = MockResponse(None, status=200)
+            # Override json() to raise an exception
+            response.json
+
+            def json_raises():
+                raise ValueError("Invalid JSON")
+
+            response.json = json_raises
+            return response
+
+    monkeypatch.setattr("httpx.AsyncClient", lambda: JSONErrorClient())
+
+    pipeline_mod.set_pipeline_state(True)
+    await pipeline_mod.telemetry_pipeline()
+
+    captured = capsys.readouterr()
+    assert "[Pipeline] Starting telemetry ingestion loop..." in captured.out
+    assert "[Pipeline Error]" in captured.out or "error" in captured.out.lower()
+
+
+@pytest.mark.asyncio
+async def test_mock_response_raise_for_status(monkeypatch, capsys):
+    """Test MockResponse raise_for_status method."""
+    response = MockResponse({"data": []}, status=500)
+    try:
+        response.raise_for_status()
+    except Exception as e:
+        # This exception handler should be covered
+        assert "500" in str(e)

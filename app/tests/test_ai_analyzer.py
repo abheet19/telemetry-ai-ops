@@ -1,4 +1,5 @@
 import pytest
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 import json
 from app.services.ai_analyzer import AIAnalyzer
@@ -155,3 +156,108 @@ async def test_call_external_ai_handles_exception(monkeypatch, capsys):
     assert "AI analysis failed" in results[0]["message"]
     captured = capsys.readouterr().out
     assert "OpenAI call failed" in captured
+
+
+@pytest.mark.asyncio
+async def test_run_ai_analysis_batch_cancelled_error(monkeypatch, capsys):
+    """Test that CancelledError is properly handled and re-raised in batch analysis."""
+    analyzer = AIAnalyzer()
+
+    async def mock_call_external_ai(records):
+        raise asyncio.CancelledError("Batch cancelled")
+
+    monkeypatch.setattr(analyzer, "_call_external_ai_for_batch", mock_call_external_ai)
+
+    batch = [
+        {"osnr": 10.0, "ber": 1e-4, "device_id": "sw1"},
+    ]
+
+    with pytest.raises(asyncio.CancelledError):
+        await analyzer.run_ai_analysis_batch(batch)
+
+    captured = capsys.readouterr().out
+    assert "Batch cancelled" in captured or "cancelled" in captured.lower()
+
+
+@pytest.mark.asyncio
+async def test_run_ai_analysis_missing_fields():
+    """Test run_ai_analysis with missing osnr or ber fields."""
+    analyzer = AIAnalyzer()
+
+    # Missing osnr
+    rec1 = {"ber": 1e-9}
+    result1 = await analyzer.run_ai_analysis(rec1)
+    assert result1["status"] == "needs_ai"
+
+    # Missing ber
+    rec2 = {"osnr": 35.0}
+    result2 = await analyzer.run_ai_analysis(rec2)
+    assert result2["status"] == "needs_ai"
+
+    # Both missing
+    rec3 = {}
+    result3 = await analyzer.run_ai_analysis(rec3)
+    assert result3["status"] == "needs_ai"
+
+    # None values
+    rec4 = {"osnr": None, "ber": None}
+    result4 = await analyzer.run_ai_analysis(rec4)
+    assert result4["status"] == "needs_ai"
+
+
+@pytest.mark.asyncio
+async def test_call_external_ai_json_decode_error(monkeypatch, capsys):
+    """Test handling of JSON decode errors in AI response."""
+    fake_response = MagicMock()
+    fake_response.choices = [
+        MagicMock(message=MagicMock(content="```json\ninvalid json{```"))
+    ]
+
+    fake_client = AsyncMock()
+    fake_client.chat.completions.create = AsyncMock(return_value=fake_response)
+    monkeypatch.setattr(
+        "app.services.ai_analyzer.AsyncOpenAI", lambda api_key: fake_client
+    )
+
+    analyzer = AIAnalyzer()
+    recs = [{"device_id": "switch_1"}]
+    results = await analyzer._call_external_ai_for_batch(recs)
+
+    assert len(results) == 1
+    # Should fall back to line mode
+    assert "device_id" in results[0] or "message" in results[0]
+    captured = capsys.readouterr().out
+    assert "Non-JSON" in captured or "falling back" in captured.lower()
+
+
+@pytest.mark.asyncio
+async def test_call_external_ai_parsed_list_with_status_key(monkeypatch, capsys):
+    """Test AI response parsing when parsed is a list with Status key."""
+    fake_response = MagicMock()
+    fake_response.choices = [
+        MagicMock(
+            message=MagicMock(
+                content=json.dumps(
+                    [
+                        {"Status": "Healthy", "message": "All good"},
+                        {"Status": "Alert", "message": "High BER"},
+                    ]
+                )
+            )
+        )
+    ]
+
+    fake_client = AsyncMock()
+    fake_client.chat.completions.create = AsyncMock(return_value=fake_response)
+    monkeypatch.setattr(
+        "app.services.ai_analyzer.AsyncOpenAI", lambda api_key: fake_client
+    )
+
+    analyzer = AIAnalyzer()
+    recs = [{"device_id": "switch_1"}, {"device_id": "amp_1"}]
+    results = await analyzer._call_external_ai_for_batch(recs)
+
+    assert len(results) == 2
+    assert all("device_id" in r for r in results)
+    captured = capsys.readouterr().out
+    assert "AI Insights" in captured
